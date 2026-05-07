@@ -1,0 +1,153 @@
+#include <iostream>
+#include <omp.h>
+using namespace std;
+
+// ----------------- Bubble Sort -----------------
+
+void bubbleSequential(int a[], int n) {
+    for (int i = 0; i < n - 1; i++)
+        for (int j = 0; j < n - i - 1; j++)
+            if (a[j] > a[j + 1])
+                swap(a[j], a[j + 1]);
+}
+
+// "Parallel" Bubble Sort: odd-even style
+void bubbleParallel(int a[], int n) {
+    for (int i = 0; i < n; i++) {
+        int start = i % 2;  // even phase / odd phase
+        #pragma omp parallel for
+        for (int j = start; j < n - 1; j += 2) {
+            if (a[j] > a[j + 1])
+                swap(a[j], a[j + 1]);
+        }
+    }
+}
+
+// ----------------- Merge Sort -----------------
+
+void merge(int a[], int l, int m, int r) {
+    int n1 = m - l + 1;
+    int n2 = r - m;
+
+    int *L = new int[n1];
+    int *R = new int[n2];
+
+    for (int i = 0; i < n1; i++)
+        L[i] = a[l + i];
+    for (int j = 0; j < n2; j++)
+        R[j] = a[m + 1 + j];
+
+    int i = 0, j = 0, k = l;
+
+    while (i < n1 && j < n2) {
+        if (L[i] <= R[j])
+            a[k++] = L[i++];
+        else
+            a[k++] = R[j++];
+    }
+    while (i < n1)
+        a[k++] = L[i++];
+    while (j < n2)
+        a[k++] = R[j++];
+
+    delete[] L;
+    delete[] R;
+}
+
+void mergeSequential(int a[], int l, int r) {
+    if (l < r) {
+        int m = (l + r) / 2;
+        mergeSequential(a, l, m);
+        mergeSequential(a, m + 1, r);
+        merge(a, l, m, r);
+    }
+}
+
+// Parallel Merge Sort using OpenMP sections (simple version)
+void mergeParallel(int a[], int l, int r, int depth) {
+    if (l < r) {
+        int m = (l + r) / 2;
+
+        if (depth <= 2) {   // limit recursion parallelism
+            #pragma omp parallel sections
+            {
+                #pragma omp section
+                mergeParallel(a, l, m, depth + 1);
+
+                #pragma omp section
+                mergeParallel(a, m + 1, r, depth + 1);
+            }
+        } else {
+            mergeParallel(a, l, m, depth + 1);
+            mergeParallel(a, m + 1, r, depth + 1);
+        }
+
+        merge(a, l, m, r);
+    }
+}
+
+// ----------------- Utility -----------------
+
+void printArray(int a[], int n) {
+    for (int i = 0; i < n; i++)
+        cout << a[i] << " ";
+    cout << endl;
+}
+
+int main() {
+    int n;
+    cout << "Enter number of elements: ";
+    cin >> n;
+
+    int *arr_bub_seq = new int[n];
+    int *arr_bub_par = new int[n];
+    int *arr_mer_seq = new int[n];
+    int *arr_mer_par = new int[n];
+
+    cout << "Enter " << n << " elements: ";
+    for (int i = 0; i < n; i++) {
+        cin >> arr_bub_seq[i];
+        arr_bub_par[i] = arr_bub_seq[i];
+        arr_mer_seq[i] = arr_bub_seq[i];
+        arr_mer_par[i] = arr_bub_seq[i];
+    }
+
+    double t1, t2;
+
+    // --------- Bubble Sort ---------
+    t1 = omp_get_wtime();
+    bubbleSequential(arr_bub_seq, n);
+    t2 = omp_get_wtime();
+    cout << "\nSequential Bubble Sort: ";
+    printArray(arr_bub_seq, n);
+    cout << "Time (Seq Bubble): " << (t2 - t1) << " seconds\n";
+
+    t1 = omp_get_wtime();
+    bubbleParallel(arr_bub_par, n);
+    t2 = omp_get_wtime();
+    cout << "Parallel Bubble Sort:   ";
+    printArray(arr_bub_par, n);
+    cout << "Time (Par Bubble): " << (t2 - t1) << " seconds\n";
+
+    // --------- Merge Sort ---------
+    t1 = omp_get_wtime();
+    mergeSequential(arr_mer_seq, 0, n - 1);
+    t2 = omp_get_wtime();
+    cout << "\nSequential Merge Sort: ";
+    printArray(arr_mer_seq, n);
+    cout << "Time (Seq Merge): " << (t2 - t1) << " seconds\n";
+
+    t1 = omp_get_wtime();
+    mergeParallel(arr_mer_par, 0, n - 1, 0);
+    t2 = omp_get_wtime();
+    cout << "Parallel Merge Sort:   ";
+    printArray(arr_mer_par, n);
+    cout << "Time (Par Merge): " << (t2 - t1) << " seconds\n";
+
+    delete[] arr_bub_seq;
+    delete[] arr_bub_par;
+    delete[] arr_mer_seq;
+    delete[] arr_mer_par;
+
+    return 0;
+}
